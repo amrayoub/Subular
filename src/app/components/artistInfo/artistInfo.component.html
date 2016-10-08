@@ -1,0 +1,13 @@
+<div #componentWrap [style.background-image]="backgroundImage" class="artist-info">
+	<div class="artist-info-bio">
+		<h1>{{ artistName }}</h1>
+		<img [src]="artist != null ? artist.mediumImageUrl : '../../../images/coverart.jpeg'" />
+		{{ artist?.biography }}
+	</div>
+	<div *ngFor="let album of albums$ | async" class="album-card">
+		<a [routerLink]="['/artist/' + album.artistId + '/album/' +  album.id]">
+			<img [src]="album.coverArt != null ? album.coverArt : '../../../images/coverart.jpeg' " alt="" />
+			<span class="album-name">{{ album.name }}</span>
+		</a>
+	</div>
+</div>

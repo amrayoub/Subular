@@ -1,57 +1,41 @@
-import {Http} from '@angular/http';
-import {Injectable} from '@angular/core';
-import { Store, Action } from '@ngrx/store';
-import { Observable } from 'rxjs/Observable';
-import { IServer, IArtist, REDUCERS_DICTONARY, SERVER_ACTIONS, ARTIST_ACTIONS, APP_STATE_ACTIONS } from '../reducers/reducers.index';
-import 'rxjs/add/operator/map';
-import 'rxjs/add/operator/do';
-import 'rxjs/add/operator/switchMap';
-import { StateUpdates, Effect } from '@ngrx/effects';
+import { Http, Response } from '@angular/http';
+import { Injectable } from '@angular/core';
+import { Store } from '@ngrx/store';
+import { Observable, Subscription, Observer } from 'rxjs/Rx';
+import { IServer,  REDUCERS_DICTONARY, SERVER_ACTIONS, APP_STATE_ACTIONS } from '../reducers/reducers.index';
+// import { StateUpdates, Effect } from '@ngrx/effects';
+import { IArtist, IAlbum } from '../shared/models';
+
+export const LOCALSTORAGE_KEYS = {
+	artists: 'subular-artists',
+	albums: 'subular-albums'
+};
 
 @Injectable()
 export class SubularService {
-	// private settings: Observable<IServer>;
+	private server: IServer;
 
-	@Effect() artists$ = this.updates$
-		.whenAction(SERVER_ACTIONS.ADD_SERVER)
-		.map(update => {
-			return update.action.payload;
-		})
-		.switchMap(payload => this.buildArtistDatabase(payload)
-			.map(res => ({ type:ARTIST_ACTIONS.ADD_ARTISTS , payload: res })));
 
-	constructor(private http: Http, private store: Store<any>, private updates$: StateUpdates<any>) {
+	constructor(private http: Http, private store: Store<any>) {
+		this.store.select<IServer[]>(REDUCERS_DICTONARY.servers).subscribe((servers) => {
+			this.server = servers.filter((server) => {
+				return server.selected;
+			})[0];
+		});
+
 
 	}
 
+	buildServerData(): Observable<any> {
+		return Observable.merge(
+			this.buildArtistDatabase(),
+			this.buildAlbumDatabase(0)
+		);
+	}
 
-
-	// buildServerData(server: IServer): void {
-	// 	// if (this._settings.ServerAddress != null && this._settings.Username != null) {
-
-	// 	// 	window.localStorage.setItem('subular-albums', JSON.stringify([]));
-	// 	// 	window.localStorage.setItem('subular-artists', JSON.stringify([]));
-	// 	// 	window.localStorage.setItem('subular-playlist', JSON.stringify([]));
-	// 	// 	window.localStorage.setItem('subular-songs', JSON.stringify([]));
-	// 	this.buildArtistDatabase(server)
-	// 		.subscribe(
-	// 			(payload) => this.store.dispatch({ type: ARTIST_ACTIONS.ADD_ARTISTS, payload: payload }),
-	// 			null,
-	// 			() => this.store.dispatch({type:APP_STATE_ACTIONS.PAUSED})
-	// 		);
-
-	// 	// 	this.buildPlayListDatabase();
-	// 	// 	this.buildAlbumDatabase();
-	// 	// }
-	// }
-
-	// getCoverUrl(id: number): string {
-	// 	return this._settings.getServerURl('getCoverArt') + '&id=' + id + '&size=274';
-	// }
-
-	// getStreamUrl(id: number): string {
-	// 	return this._settings.getServerURl('stream') + '&id=' + id;
-	// }
+	getStreamUrl(id: number): string {
+		return this.getServerURl(this.server, 'stream', `id=${id}`);
+	}
 
 	// // returns and observable of all the songs.
 	// getSongsByAlbumId(parentId: number): Observable<any> {
@@ -96,38 +80,53 @@ export class SubularService {
 	// }
 
 
-	// getAlbums(parentId?: number): IAlbum[] {
-	// 	if (parentId == null) {
-	// 		return JSON.parse(window.localStorage.getItem('subular-albums'));
-	// 	} else {
-	// 		let albums: IAlbum[] = JSON.parse(window.localStorage.getItem('subular-albums'));
-	// 		let result: IAlbum[] = [];
-	// 		if (albums != null) {
-	// 			result = albums.filter((album: IAlbum) => {
-	// 				return album.parent === parentId;
-	// 			});
-	// 		}
+	getAlbum(albumId: number): Observable<IAlbum> {
+		let albums: IAlbum[] = JSON.parse(window.localStorage.getItem(LOCALSTORAGE_KEYS.albums));
+		if(albums){
+			let result = albums.filter((album: IAlbum) => {
+				return album.id === albumId;
+			})[0];
+			return Observable.of(result);
+		}
+		return Observable.of(null);
+	}
 
-	// 		return result;
-	// 	}
-	// }
+	getArtist(artistId: number): Observable<IArtist> {
+		let artists: IArtist[] = JSON.parse(window.localStorage.getItem(LOCALSTORAGE_KEYS.artists));
+		if(artists){
+			let result = artists.filter((artist: IArtist) => {
+				return artist.id == artistId;
+			})[0];
+			return Observable.of(result);
+		}
+		return Observable.of(null);
+	}
 
-	// getalbum(id: number): IAlbum {
-	// 	let albums: IAlbum[] = JSON.parse(window.localStorage.getItem('subular-albums'));
-	// 	let result = albums.filter((album: IAlbum) => {
-	// 		return album.id === id;
-	// 	});
-	// 	return result[0];
-	// }
+	saveArtist(artist: IArtist): void{
+	let artists: IArtist[] = JSON.parse(window.localStorage.getItem(LOCALSTORAGE_KEYS.artists));
+		if(artists){
+			let artistIndex = artists.findIndex(value => value.id === artist.id);
+			artists[artistIndex] = artist;
 
-	// getArtist(name: string): IArtist {
-	// 	return this.getArtists().find((value: IArtist) => {
-	// 		return value.name == name;
-	// 	});
-	// }
-	// getArtists(): IArtist[] {
-	// 	return JSON.parse(window.localStorage.getItem('subular-artists'))
-	// }
+			window.localStorage.setItem(LOCALSTORAGE_KEYS.artists, JSON.stringify(artists));
+		}
+	}
+
+	getArtists(): Observable<IArtist[]>{
+		let artists: IArtist[] = JSON.parse(window.localStorage.getItem(LOCALSTORAGE_KEYS.artists));
+		return Observable.of(artists);
+	}
+
+	getArtistAlbums(artistId:number): Observable<IAlbum[]> {
+		let albums: IAlbum[] = JSON.parse(window.localStorage.getItem(LOCALSTORAGE_KEYS.albums));
+		if(albums){
+			let result = albums.filter((album: IAlbum) => {
+				return album.artistId == artistId;
+			});
+			return Observable.of(result);
+		}
+		return Observable.of(null);
+	}
 
 	// getPlaylists(): IPlaylist[] {
 	// 	return JSON.parse(window.localStorage.getItem('subular-playlist'))
@@ -200,51 +199,117 @@ export class SubularService {
 	// 		}
 	// 	);
 	// }
-	private cleanSubsonicResponse(data: any): string {
-		return JSON.stringify(data).replace('subsonic-response', 'subresp');
+	private cleanSubsonicResponse(data: any): any {
+		return JSON.parse(JSON.stringify(data).replace('subsonic-response', 'subresp')).subresp;
 	}
 
-	getServerURl(server: IServer, method: string) {
-		return `${server.serverAddress}/rest/${method}.view?u=${server.serverUserName}&t=${server.serverPassword}&s=${server.salt}&v=1.0.0&c=rest&f=json`;
+	getServerURl(server: IServer, method: string, ...args: string[]) {
+		let additionalArguments = '';
+		if (args) {
+			additionalArguments = `&${args.join('&')}`;
+		}
+		return `${server.serverAddress}/rest/${method}.view?u=${server.serverUserName}&t=${server.serverPassword}&s=${server.salt}${additionalArguments}&v=1.0.0&c=rest&f=json`;
 	}
 
-	private buildArtistDatabase(server: IServer): Observable<any> {
+	private buildArtistDatabase(): Observable<any> {
 		let artistString;
-		let address = this.getServerURl(server, 'getIndexes');
+		let address = this.getServerURl(this.server, 'getArtists');
+		let artistsLocalStorage = window.localStorage.getItem(LOCALSTORAGE_KEYS.artists);
+
+		//if we have values in local storage pull them out instead of hitting the api.
+		if (artistsLocalStorage) {
+			return Observable.of(JSON.parse(artistsLocalStorage));
+		}
+
 		return this.http.get(address)
 			.map(resp => resp.json())
 			.map(payload => {
-				artistString = this.cleanSubsonicResponse(payload);
 				let artists: any[] = [];
-				let artistsList: any[] = JSON.parse(artistString).subresp.indexes.index;
+				let artistsList: any[] = this.cleanSubsonicResponse(payload).artists.index;
 				artistsList.forEach((value, index) => {
 					artists = artists.concat(value.artist);
 				});
-				//window.localStorage.setItem('subular-artists', JSON.stringify(artists));
+				window.localStorage.setItem(LOCALSTORAGE_KEYS.artists, JSON.stringify(artists));
 				return artists;
 			});
 	}
-	// private buildAlbumDatabase(offset?: number): void {
-	// 	let albumString
-	// 	offset = (!offset ? 0 : offset);
-	// 	let address = this._settings.getServerURl('getAlbumList') + '&type=newest&size=500&offset=' + offset;
-	// 	this._http.get(address).map(resp => resp.json()).subscribe(
-	// 		data => albumString = this.cleanSubsonicResponse(data),
-	// 		error => console.log(error),
-	// 		() => {
-	// 			try {
-	// 				let albums: any[] = JSON.parse(albumString).subresp.albumList.album;
-	// 				if (albums.length === 500) {
-	// 					this.buildAlbumDatabase(offset + 500);
-	// 				}
-	// 				let newAlbums = this.getAlbums().concat(albums);
-	// 				window.localStorage.setItem('subular-albums', JSON.stringify(newAlbums));
-	// 			} catch (e) {
-	// 				console.log(e);
-	// 			}
-	// 		}
-	// 	);
-	// }
+
+
+	getArtistInfo(artistId: number): Observable<IArtist[]> {
+		let address = this.getServerURl(this.server, 'getArtistInfo2', `id=${artistId}`);
+		let artistInfo;
+		return this.getArtist(artistId).flatMap((artist) => this.http.get(address)
+			.map(resp => resp.json())
+			.map(data => {
+				artistInfo = this.cleanSubsonicResponse(data);
+				if (!artist.coverArt) {
+					artist.coverArt = artistInfo.artistInfo2.largeImageUrl;
+					this.saveArtist(artist);
+				}
+				return artistInfo.artistInfo2;
+			}));
+	}
+
+	getAlbumInfo(albumId: number): Observable<IAlbum> {
+		let address = this.getServerURl(this.server, 'getAlbum', `id=${albumId}`);
+		let albumInfo;
+		return this.http.get(address)
+			.map(resp => resp.json())
+			.map(data => {
+				let album = this.cleanSubsonicResponse(data).album;
+				album.coverArt = this.getCoverUrl(album.coverArt);
+				return album;
+			});
+	}
+
+	getCoverUrl(id: string): string {
+		return this.getServerURl(this.server,'getCoverArt', `id=${id}`, 'size=500');
+	}
+
+	buildAlbumDatabase(offset?: number, existingAlbums?:IAlbum[]): Observable<any> {
+		offset = (!offset ? 0 : offset);
+		let address = this.getServerURl(this.server, 'getAlbumList2', 'type=newest', 'size=500', `offset=${offset}`);
+
+		let albumLocalStorage = window.localStorage.getItem(LOCALSTORAGE_KEYS.albums);
+	//	if we have values in local storage pull them out instead of hitting the api.
+		if (albumLocalStorage) {
+			return Observable.of(JSON.parse(albumLocalStorage));
+		}
+
+		return this.http.get(address)
+			.map(resp => resp.json())
+			.map(data => this.cleanSubsonicResponse(data).albumList2.album.map((album)=> {
+				album.coverArt = this.getCoverUrl(album.coverArt);
+				return album;
+			}))
+			.map(data => existingAlbums != null ? data.concat(existingAlbums) : data)
+			.switchMap((albums) => {
+
+				if ((albums.length % 500) == 0) {
+					return this.buildAlbumDatabase(offset + 500, albums);
+				}
+				window.localStorage.setItem(LOCALSTORAGE_KEYS.albums, JSON.stringify(albums));
+				return new Observable((observer:Observer<IAlbum[]>)=>{
+					observer.next(albums);
+				});
+			});
+	}
+
+	getAlbums(parentId?: number): IAlbum[] {
+		//if (parentId == null) {
+		return JSON.parse(window.localStorage.getItem('subular-albums'));
+		// } else {
+		// 	let albums: IAlbum[] = JSON.parse(window.localStorage.getItem('subular-albums'));
+		// 	let result: IAlbum[] = [];
+		// 	if (albums != null) {
+		// 		result = albums.filter((album: IAlbum) => {
+		// 			return album.parent === parentId;
+		// 		});
+		// 	}
+
+		// 	return result;
+		// }
+	}
 
 	// buildSongsListForArtist(id): void {
 	// 	let albums: IAlbum[] = this.getAlbums(id);

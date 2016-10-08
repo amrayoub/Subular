@@ -1,11 +1,6 @@
 
 import { ActionReducer  } from '@ngrx/store';
-
-
-export interface IArtist {
-	id: number;
-	name: string;
-}
+import { IArtist } from '../shared/models';
 
 export const ARTIST_ACTIONS = {
 	ADD_ARTISTS: 'ADD_ARTISTS',
